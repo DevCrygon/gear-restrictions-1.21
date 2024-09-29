@@ -1,89 +1,98 @@
 package net.crygon.gearrestrictions;
 
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ArmorItem;
-import net.minecraft.item.ArmorMaterials;
-import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.TypedActionResult;
 
 public class ArmourEquipHandler {
 
     public static void register() {
-        // Register the event for use actions (clicking, equipping, etc.)
+        // Register the event callback for armor equip checks
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (!world.isClient) {
-                checkArmor(player);
+                if (player instanceof ServerPlayerEntity) {
+                    checkArmour((ServerPlayerEntity) player);
+                }
             }
-            return new TypedActionResult<>(ActionResult.PASS, player.getStackInHand(hand));
-        });
-
-        // Register the tick event to check for armor changes in the inventory
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                checkArmor(player);
-            }
+            return TypedActionResult.pass(ItemStack.EMPTY);
         });
     }
 
-    public static boolean isArmorSlot(EquipmentSlot slot) {
-        return slot == EquipmentSlot.CHEST ||
-                slot == EquipmentSlot.FEET ||
-                slot == EquipmentSlot.HEAD ||
-                slot == EquipmentSlot.LEGS;
-    }
-    // Check if the armor being equipped is stronger than iron
-    private static void checkArmor(PlayerEntity player) {
+    // Check if the player is allowed to equip specific armor based on their kill count
+    private static void checkArmour(ServerPlayerEntity player) {
+        int kills = KillTracker.getKillCount(player); // Get the player's kill count
+
         for (EquipmentSlot slot : EquipmentSlot.values()) {
-            // Only check armor slots (head, chest, legs, boots)
-            if (isArmorSlot(slot)) {
-                ItemStack armorPiece = player.getEquippedStack(slot);
+            if (slot.getType() == EquipmentSlot.BODY.getType() ||
+                    slot.getType() == EquipmentSlot.HEAD.getType()  ||
+                    slot.getType() == EquipmentSlot.CHEST.getType()  ||
+                    slot.getType() == EquipmentSlot.LEGS.getType() ||
+                    slot.getType() == EquipmentSlot.FEET.getType()) {
+                ArmorItem armorItem = getArmorFromSlot(player, slot);
 
-                if (armorPiece.getItem() instanceof ArmorItem armorItem) {
-
-                    // Check if the armor is made of stronger material than iron
-                    if (isStrongerThanIron(armorItem)) {
-                        // Send message to the player and return armor to the previous slot
-                        player.sendMessage(Text.literal("You cannot wear armor stronger than iron!"), true);
-
-                        // Find an empty slot or the original slot to put the armor back in
-                        boolean itemReturned = returnArmorToOriginalSlot(player, armorPiece);
-
-                        if (!itemReturned) {
-                            // If no original slot was found, just insert into inventory
-                            player.getInventory().insertStack(armorPiece);
-                        }
-
-                        // Remove the armor from the equipped slot
-                        player.equipStack(slot, ItemStack.EMPTY);
+                // Determine if the player is allowed to equip the item based on their kill count
+                if (armorItem != null) {
+                    if (!canEquipArmor(kills, armorItem)) {
+                        player.sendMessage(Text.literal("You need more kills to equip this armor!"), true);
+                        player.equipStack(slot, ItemStack.EMPTY); // Remove the armor
+                    } else {
+                        sendUnlockMessage(player, armorItem, kills);
                     }
                 }
             }
         }
     }
 
-    // Check if the armor is stronger than iron (diamond, netherite, etc.)
-    private static boolean isStrongerThanIron(ArmorItem armorItem) {
-        return armorItem.getMaterial() == ArmorMaterials.DIAMOND || armorItem.getMaterial() == ArmorMaterials.NETHERITE;
+    // Determine if the player can equip armor based on their kill count
+    private static boolean canEquipArmor(int kills, ArmorItem armorItem) {
+        // Diamond Boots (1 kill)
+        if (armorItem == Items.DIAMOND_BOOTS && kills >= 1) return true;
+
+        // Diamond Helmet (2 kills)
+        if (armorItem == Items.DIAMOND_HELMET && kills >= 2) return true;
+
+        // Diamond Leggings (3 kills)
+        if (armorItem == Items.DIAMOND_LEGGINGS && kills >= 3) return true;
+
+        // Full Diamond Armor (4+ kills)
+        if (armorItem == Items.DIAMOND_CHESTPLATE && kills >= 4) return true;
+
+        // Netherite Boots (6 kills)
+        if (armorItem == Items.NETHERITE_BOOTS && kills >= 6) return true;
+
+        // Netherite Helmet (7 kills)
+        if (armorItem == Items.NETHERITE_HELMET && kills >= 7) return true;
+
+        // Netherite Leggings (9 kills)
+        if (armorItem == Items.NETHERITE_LEGGINGS && kills >= 9) return true;
+
+        // Full Netherite Armor (11 kills)
+        if (armorItem == Items.NETHERITE_CHESTPLATE && kills >= 11) return true;
+
+        // Armor is too strong for the player's current kill count
+        return false;
     }
 
-    // Attempt to return the armor to its original inventory slot
-    private static boolean returnArmorToOriginalSlot(PlayerEntity player, ItemStack armorPiece) {
-        // Iterate through player's inventory to find where the armor piece was before
-        for (int i = 0; i < player.getInventory().size(); i++) {
-            ItemStack itemStack = player.getInventory().getStack(i);
-
-            // If we find an empty slot, return the armor there
-            if (itemStack.isEmpty()) {
-                player.getInventory().setStack(i, armorPiece);
-                return true;
-            }
+    // Helper to get armor item from a player's armor slot
+    private static ArmorItem getArmorFromSlot(PlayerEntity player, EquipmentSlot slot) {
+        ItemStack equippedStack = player.getEquippedStack(slot);
+        if (equippedStack.getItem() instanceof ArmorItem) {
+            return (ArmorItem) equippedStack.getItem();
         }
-        return false;
+        return null;
+    }
+
+    // Send an action bar message for unlocked armor
+    private static void sendUnlockMessage(ServerPlayerEntity player, ArmorItem armorItem, int kills) {
+        String unlockMessage = "You have unlocked: " + armorItem.getName(armorItem.getDefaultStack()).getString();
+        player.sendMessage(Text.literal(unlockMessage).setStyle(Style.EMPTY.withBold(true)), false);
     }
 }
