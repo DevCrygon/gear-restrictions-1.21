@@ -1,98 +1,93 @@
 package net.crygon.gearrestrictions;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ArmorItem;
 import net.minecraft.item.Items;
+import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Style;
 import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.Formatting;
+
+import java.util.Collection;
+import java.util.Objects;
 
 public class ArmourEquipHandler {
 
+    private static ScoreboardObjective killObjective;
+
     public static void register() {
-        // Register the event callback for armor equip checks
         UseItemCallback.EVENT.register((player, world, hand) -> {
-            if (!world.isClient) {
-                if (player instanceof ServerPlayerEntity) {
-                    checkArmour((ServerPlayerEntity) player);
-                }
+            if (!world.isClient && player instanceof ServerPlayerEntity serverPlayer) {
+                checkArmour(serverPlayer);
             }
             return TypedActionResult.pass(ItemStack.EMPTY);
         });
+
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                checkArmour(player);
+            }
+        });
     }
 
-    // Check if the player is allowed to equip specific armor based on their kill count
     private static void checkArmour(ServerPlayerEntity player) {
-        int kills = KillTracker.getKillCount(player); // Get the player's kill count
+        int killCount = getKillCountFromScoreboard(player);
 
         for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() == EquipmentSlot.BODY.getType() ||
-                    slot.getType() == EquipmentSlot.HEAD.getType()  ||
-                    slot.getType() == EquipmentSlot.CHEST.getType()  ||
-                    slot.getType() == EquipmentSlot.LEGS.getType() ||
-                    slot.getType() == EquipmentSlot.FEET.getType()) {
-                ArmorItem armorItem = getArmorFromSlot(player, slot);
-
-                // Determine if the player is allowed to equip the item based on their kill count
-                if (armorItem != null) {
-                    if (!canEquipArmor(kills, armorItem)) {
-                        player.sendMessage(Text.literal("You need more kills to equip this armor!"), true);
-                        player.equipStack(slot, ItemStack.EMPTY); // Remove the armor
-                    } else {
-                        sendUnlockMessage(player, armorItem, kills);
-                    }
+            ItemStack armorPiece = player.getEquippedStack(slot);
+            if (armorPiece.getItem() instanceof ArmorItem armorItem) {
+                if (!canEquipArmor(killCount, armorItem)) {
+                    player.equipStack(slot, ItemStack.EMPTY); // Remove the armor
+                    player.getInventory().insertStack(armorPiece);
+                    player.sendMessage(Text.literal("You haven't unlocked this armor yet!").formatted(Formatting.DARK_RED), true);
                 }
             }
         }
     }
 
-    // Determine if the player can equip armor based on their kill count
-    private static boolean canEquipArmor(int kills, ArmorItem armorItem) {
-        // Diamond Boots (1 kill)
-        if (armorItem == Items.DIAMOND_BOOTS && kills >= 1) return true;
+    private static int getKillCountFromScoreboard(ServerPlayerEntity player) {
+        var scoreboard = Objects.requireNonNull(player.getServer()).getScoreboard();
 
-        // Diamond Helmet (2 kills)
-        if (armorItem == Items.DIAMOND_HELMET && kills >= 2) return true;
-
-        // Diamond Leggings (3 kills)
-        if (armorItem == Items.DIAMOND_LEGGINGS && kills >= 3) return true;
-
-        // Full Diamond Armor (4+ kills)
-        if (armorItem == Items.DIAMOND_CHESTPLATE && kills >= 4) return true;
-
-        // Netherite Boots (6 kills)
-        if (armorItem == Items.NETHERITE_BOOTS && kills >= 6) return true;
-
-        // Netherite Helmet (7 kills)
-        if (armorItem == Items.NETHERITE_HELMET && kills >= 7) return true;
-
-        // Netherite Leggings (9 kills)
-        if (armorItem == Items.NETHERITE_LEGGINGS && kills >= 9) return true;
-
-        // Full Netherite Armor (11 kills)
-        if (armorItem == Items.NETHERITE_CHESTPLATE && kills >= 11) return true;
-
-        // Armor is too strong for the player's current kill count
-        return false;
-    }
-
-    // Helper to get armor item from a player's armor slot
-    private static ArmorItem getArmorFromSlot(PlayerEntity player, EquipmentSlot slot) {
-        ItemStack equippedStack = player.getEquippedStack(slot);
-        if (equippedStack.getItem() instanceof ArmorItem) {
-            return (ArmorItem) equippedStack.getItem();
+        var objectives = scoreboard.getObjectives();
+        for (ScoreboardObjective objective : objectives) {
+            if (objective.getName().equals("playerKillCount")) {
+                killObjective = objective;
+                break;
+            }
         }
-        return null;
+
+        if (killObjective == null) {
+            GearRestrictions.createKillScoreboard(player, false);
+            return 0; // Return 0 if the objective isn't found
+        }
+
+        var score = player.getScoreboard().getOrCreateScore(player, killObjective);
+        return score.getScore();
     }
 
-    // Send an action bar message for unlocked armor
-    private static void sendUnlockMessage(ServerPlayerEntity player, ArmorItem armorItem, int kills) {
-        String unlockMessage = "You have unlocked: " + armorItem.getName(armorItem.getDefaultStack()).getString();
-        player.sendMessage(Text.literal(unlockMessage).setStyle(Style.EMPTY.withBold(true)), false);
+    private static boolean canEquipArmor(int killCount, ArmorItem armorItem) {
+        // Armor restrictions based on kill count
+
+        // 0 kills: Iron armor is always allowed
+        if (armorItem.equals(Items.IRON_BOOTS) || armorItem.equals(Items.IRON_CHESTPLATE) ||
+                armorItem.equals(Items.IRON_LEGGINGS) || armorItem.equals(Items.IRON_HELMET)) {
+            return true;
+        }
+
+        // Diamond and Netherite armor unlock progression based on kill count
+        return switch (killCount) {
+            case 1 -> armorItem.equals(Items.DIAMOND_BOOTS);
+            case 2 -> armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_HELMET);
+            case 3 -> armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.DIAMOND_LEGGINGS);
+            case 4 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET);
+            case 6 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS);
+            case 7 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET);
+            case 9 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET) || armorItem.equals(Items.NETHERITE_LEGGINGS);
+            default -> killCount >= 11 && (armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_CHESTPLATE) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_LEGGINGS) || armorItem.equals(Items.NETHERITE_HELMET));
+        };
     }
 }
