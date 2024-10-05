@@ -3,6 +3,7 @@ package net.crygon.gearrestrictions;
 import com.mojang.brigadier.ParseResults;
 import it.unimi.dsi.fastutil.ints.Int2IntSortedMaps;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.scoreboard.*;
 import net.minecraft.scoreboard.number.FixedNumberFormat;
 import net.minecraft.server.MinecraftServer;
@@ -21,6 +22,7 @@ public class GearRestrictions implements ModInitializer {
 	public void onInitialize() {
 		KillTracker.register();
 		ArmourEquipHandler.register();
+		CommandRegistrationCallback.EVENT.register(ThanksDevCommand::register);
 	}
 
 	public static void createKillScoreboard(ServerPlayerEntity player, Boolean reset) {
