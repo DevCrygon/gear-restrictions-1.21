@@ -35,7 +35,7 @@ public class GearRestrictions implements ModInitializer {
 		ServerCommandSource commandSource = player.getServer().getCommandSource();
 
 		if (reset) {
-			commandManager.executeWithPrefix(commandSource, "scoreboard players reset " + player.getName() + " playerKillCount");
+			commandManager.executeWithPrefix(commandSource, "scoreboard players set " + player.getName() + " playerKillCount 0");
 		}
 		else {
 			commandManager.executeWithPrefix(commandSource, "scoreboard objectives add playerKillCount playerKillCount");

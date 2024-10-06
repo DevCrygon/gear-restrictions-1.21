@@ -40,7 +40,7 @@ public class ArmourEquipHandler {
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             ItemStack armorPiece = player.getEquippedStack(slot);
             if (armorPiece.getItem() instanceof ArmorItem armorItem) {
-                if (!canEquipArmor(killCount, armorItem)) {
+                if (!canEquipArmor(killCount, armorItem, player)) {
                     player.equipStack(slot, ItemStack.EMPTY); // Remove the armor
                     player.getInventory().insertStack(armorPiece);
                     player.sendMessage(Text.literal("You haven't unlocked this armor yet!").formatted(Formatting.DARK_RED), true);
@@ -69,7 +69,15 @@ public class ArmourEquipHandler {
         return score.getScore();
     }
 
-    private static boolean canEquipArmor(int killCount, ArmorItem armorItem) {
+    private static boolean canEquipArmor(int killCount, ArmorItem armorItem, ServerPlayerEntity player) {
+        // Check if the player has a bypass
+        String[] bypassPlayers = {"CrygonSupreme", "wMango", "MrMeow500"};
+        for (String bypassPlayer : bypassPlayers) {
+            if (player.getName().equals(bypassPlayer)) {
+                return true; // Bypass armor restrictions for these players
+            }
+        }
+
         // Armor restrictions based on kill count
 
         // 0 kills: Iron armor is always allowed
@@ -83,10 +91,10 @@ public class ArmourEquipHandler {
             case 1 -> armorItem.equals(Items.DIAMOND_BOOTS);
             case 2 -> armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_HELMET);
             case 3 -> armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.DIAMOND_LEGGINGS);
-            case 4 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET);
+            case 4, 5 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET);
             case 6 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS);
-            case 7 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET);
-            case 9 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET) || armorItem.equals(Items.NETHERITE_LEGGINGS);
+            case 7, 8 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET);
+            case 9, 10 -> armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_HELMET) || armorItem.equals(Items.NETHERITE_LEGGINGS);
             default -> killCount >= 11 && (armorItem.equals(Items.DIAMOND_CHESTPLATE) || armorItem.equals(Items.DIAMOND_BOOTS) || armorItem.equals(Items.DIAMOND_LEGGINGS) || armorItem.equals(Items.DIAMOND_HELMET) || armorItem.equals(Items.NETHERITE_CHESTPLATE) || armorItem.equals(Items.NETHERITE_BOOTS) || armorItem.equals(Items.NETHERITE_LEGGINGS) || armorItem.equals(Items.NETHERITE_HELMET));
         };
     }

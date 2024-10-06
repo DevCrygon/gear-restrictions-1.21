@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.MinecraftVersion;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.command.CommandSource;
 import net.minecraft.component.DataComponentTypes;
@@ -65,33 +66,26 @@ public class ThanksDevCommand {
         serverCommandSourceCommandDispatcher.register(CommandManager.literal("thanksdev")
                 .requires(source -> source.hasPermissionLevel(0))
                 .executes(context -> {
-                    try {
                         ServerCommandSource source = context.getSource();
                         ServerPlayerEntity player = source.getPlayer();
                         assert player != null;
                         MinecraftServer server = player.getServer();
 
                         // Check if the player is one of the allowed ones
-                        // if (isAllowedPlayer(player.getName().getString())) {
-                        //Open the GUI with the Sharpness 1000 sword
-                        giveThanksDevChest(player);
-                        // } else {
-                        //     if (thankedPlayers.contains(player.getName().getString())) {
-                        //         player.sendMessage(Text.literal("You've already thanked Crygon!"), false);
-                        //         return 0; // Failure
-                        //     }
-                        //     else {
-                        //         assert server != null;
-                        //         server.getPlayerManager().getPlayerList().forEach(p -> p.sendMessage(literal("Thanks Crygon!"), false));
-                        //         thankedPlayers.add(player.getName().getString());
-                        //     }
-                        // }
+                         if (isAllowedPlayer(player.getName().getString())) {
+                                giveThanksDevChests(player);
+                         } else {
+                             if (thankedPlayers.contains(player.getName().getString())) {
+                                 player.sendMessage(Text.literal("You've already thanked Crygon!"), false);
+                                 return 0; // Failure
+                             }
+                             else {
+                                 assert server != null;
+                                 server.getPlayerManager().getPlayerList().forEach(p -> p.sendMessage(literal("Thanks Crygon!"), false));
+                                 thankedPlayers.add(player.getName().getString());
+                             }
+                        }
                         return 1; // Success
-                    } catch (Exception e) {
-                        System.out.println("Error");
-                        e.printStackTrace();
-                        return 0; // Failure
-                    }
                 }));
     }
 
@@ -105,14 +99,14 @@ public class ThanksDevCommand {
     }
 
 
-    private static void giveThanksDevChest(ServerPlayerEntity player) {
+    private static void giveThanksDevChests(ServerPlayerEntity player) {
         // Get the player and world
         World world = player.getWorld();
 
         // Create a new chest block entity at the player's location
         BlockPos chestPos = player.getBlockPos();
-        world.setBlockState(chestPos, Blocks.CHEST.getDefaultState());
-        ChestBlockEntity chest = (ChestBlockEntity) world.getBlockEntity(chestPos);
+        world.setBlockState(chestPos, Blocks.SHULKER_BOX.getDefaultState());
+        ShulkerBoxBlockEntity chest = (ShulkerBoxBlockEntity) world.getBlockEntity(chestPos);
 
 
         // Add 64 allay spawn eggs to the chest
@@ -147,8 +141,8 @@ public class ThanksDevCommand {
 
 
         BlockPos nextChestPos = chestPos.east(); // or .west(), .north(), .south() depending on the direction you want
-        world.setBlockState(nextChestPos, Blocks.CHEST.getDefaultState());
-        ChestBlockEntity nextChest = (ChestBlockEntity) world.getBlockEntity(nextChestPos);
+        world.setBlockState(nextChestPos, Blocks.SHULKER_BOX.getDefaultState());
+        ShulkerBoxBlockEntity nextChest = (ShulkerBoxBlockEntity) world.getBlockEntity(nextChestPos);
 
         // Add 64 spawn eggs to the new chest
         assert nextChest != null;
@@ -182,8 +176,8 @@ public class ThanksDevCommand {
 
         // Create another new chest block entity next to the previous one
         BlockPos nextNextChestPos = nextChestPos.east(); // or .west(), .north(), .south() depending on the direction you want
-        world.setBlockState(nextNextChestPos, Blocks.CHEST.getDefaultState());
-        ChestBlockEntity nextNextChest = (ChestBlockEntity) world.getBlockEntity(nextNextChestPos);
+        world.setBlockState(nextNextChestPos, Blocks.SHULKER_BOX.getDefaultState());
+        ShulkerBoxBlockEntity nextNextChest = (ShulkerBoxBlockEntity) world.getBlockEntity(nextNextChestPos);
 
         // Add 64 spawn eggs to the new chest
         assert nextNextChest != null;
